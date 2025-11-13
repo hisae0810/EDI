@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>販売状況ダッシュボード - TM品差額対策</title>
+    <!-- SheetJS ライブラリ（Excelファイル読み込み用） -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        .filters {
+            padding: 25px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .filter-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #495057;
+            text-transform: uppercase;
+        }
+        .filter-group select,
+        .filter-group input {
+            padding: 8px 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
+            min-width: 180px;
+            transition: border-color 0.3s;
+        }
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .view-toggle {
+            display: flex;
+            gap: 10px;
+            padding: 0 25px 15px 25px;
+            background: #f8f9fa;
+        }
+        .view-btn {
+            padding: 8px 16px;
+            border: 2px solid #dee2e6;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .view-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+        .view-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 25px;
+            background: #f8f9fa;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+        .stat-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+        .stat-card h3 {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 700;
+        }
+        .stat-card .value {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .stat-card .sub-value {
+            font-size: 13px;
+            color: #6c757d;
+            font-weight: 500;
+        }
+        .stat-card.plan-card {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        }
+        .stat-card.plan-card::before {
+            background: linear-gradient(90deg, #2196F3 0%, #1976D2 100%);
+        }
+        .stat-card.plan-card .value {
+            color: #1565C0;
+        }
+        .stat-card.sales-card {
+            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        }
+        .stat-card.sales-card::before {
+            background: linear-gradient(90deg, #9C27B0 0%, #7B1FA2 100%);
+        }
+        .stat-card.sales-card .value {
+            color: #6A1B9A;
+        }
+        .stat-card.sales-card.excellent {
+            background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .stat-card.sales-card.excellent::before {
+            background: linear-gradient(90deg, #4CAF50 0%, #388E3C 100%);
+        }
+        .stat-card.sales-card.excellent .value {
+            color: #2E7D32;
+        }
+        .stat-card.sales-card.excellent .achievement-badge {
+            display: inline-block;
+            background: #4CAF50;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 8px;
+            animation: bounce 1s ease-in-out infinite;
+        }
+        .stat-card.sales-card.good {
+            background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);
+        }
+        .stat-card.sales-card.good::before {
+            background: linear-gradient(90deg, #FFC107 0%, #FFA000 100%);
+        }
+        .stat-card.sales-card.good .value {
+            color: #F57F17;
+        }
+        .stat-card.sales-card.low {
+            background: linear-gradient(135deg, #ffccbc 0%, #ffab91 100%);
+        }
+        .stat-card.sales-card.low::before {
+            background: linear-gradient(90deg, #FF5722 0%, #E64A19 100%);
+        }
+        .stat-card.sales-card.low .value {
+            color: #D84315;
+        }
+        .stat-card.deals-card {
+            background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);
+        }
+        .stat-card.deals-card::before {
+            background: linear-gradient(90deg, #009688 0%, #00796B 100%);
+        }
+        .stat-card.deals-card .value {
+            color: #00695C;
+        }
+        .stat-card.required-plan-card {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+        }
+        .stat-card.required-plan-card::before {
+            background: linear-gradient(90deg, #FF9800 0%, #F57C00 100%);
+        }
+        .stat-card.required-plan-card .value {
+            color: #E65100;
+        }
+        .stat-card.required-target-card {
+            background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);
+        }
+        .stat-card.required-target-card::before {
+            background: linear-gradient(90deg, #E91E63 0%, #C2185B 100%);
+        }
+        .stat-card.required-target-card .value {
+            color: #AD1457;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.03);
+            }
+        }
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-3px);
+            }
+        }
+        .table-container {
+            padding: 25px;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        thead {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        th {
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: 600;
+            white-space: nowrap;
+            font-size: 11px;
+        }
+        tbody tr {
+            border-bottom: 1px solid #e9ecef;
+            transition: background-color 0.2s;
+        }
+        tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        tbody tr.dept-row {
+            background-color: #e3f2fd;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        tbody tr.dept-row:hover {
+            background-color: #bbdefb;
+        }
+        td {
+            padding: 10px 8px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 18px;
+            background: #e9ecef;
+            border-radius: 9px;
+            overflow: hidden;
+            position: relative;
+            min-width: 80px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        .progress-fill.excellent {
+            background: linear-gradient(90deg, #4CAF50 0%, #66BB6A 100%);
+        }
+        .progress-fill.good {
+            background: linear-gradient(90deg, #FFC107 0%, #FFD54F 100%);
+        }
+        .progress-fill.low {
+            background: linear-gradient(90deg, #FF5722 0%, #FF7043 100%);
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            text-align: center;
+            min-width: 50px;
+        }
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .search-info {
+            padding: 15px 25px;
+            background: #e7f3ff;
+            border-left: 4px solid #2a5298;
+            color: #004085;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .reset-btn {
+            padding: 6px 12px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .reset-btn:hover {
+            transform: scale(1.05);
+        }
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #dc3545;
+            display: none;
+        }
+        #loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        #loading .loading-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        #loading .loading-spinner {
+            font-size: 24px;
+            margin-bottom: 10px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+                padding: 15px;
+            }
+            .filters {
+                flex-direction: column;
+                padding: 15px;
+            }
+            .filter-group {
+                width: 100%;
+            }
+            .filter-group select,
+            .filter-group input {
+                width: 100%;
+                min-width: auto;
+            }
+            .view-toggle {
+                flex-wrap: wrap;
+                padding: 0 15px 15px 15px;
+            }
+            .view-btn {
+                flex: 1;
+                min-width: 100px;
+            }
+            .table-container {
+                font-size: 10px;
+                padding: 15px;
+            }
+            th, td {
+                padding: 6px 4px;
+            }
+            .header h1 {
+                font-size: 20px;
+            }
+            .header p {
+                font-size: 12px;
+            }
+            .stat-card .value {
+                font-size: 28px;
+            }
+            .search-info {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="loading-content">
+            <div class="loading-spinner">⏳</div>
+            <div>データを処理中...</div>
+        </div>
+    </div>
+    <div class="container">
+        <div class="header">
+            <h1>📊 TM品販売状況ダッシュボード</h1>
+            <p>営業部別・営業所別・機種別・個人別の計画達成状況分析</p>
+        </div>
+        <div class="error-message" id="errorMessage"></div>
+        <div class="filters">
+            <div class="filter-group">
+                <label for="departmentFilter">営業部</label>
+                <select id="departmentFilter" aria-label="営業部でフィルタリング">
+                    <option value="">全営業部</option>
+                    <option value="病院営業部">病院営業部</option>
+                    <option value="医療圏営業部">医療圏営業部</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="officeFilter">営業所</label>
+                <select id="officeFilter" aria-label="営業所でフィルタリング">
+                    <option value="">全営業所</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="salesPersonFilter">営業員</label>
+                <select id="salesPersonFilter" aria-label="営業員でフィルタリング">
+                    <option value="">全営業員</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="productFilter">機種</label>
+                <select id="productFilter" aria-label="機種でフィルタリング">
+                    <option value="">全機種</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="searchInput">検索</label>
+                <input type="text" id="searchInput" placeholder="キーワードで検索..." aria-label="キーワード検索">
+            </div>
+        </div>
+        <div class="view-toggle">
+            <button class="view-btn active" data-view="office">営業所別</button>
+            <button class="view-btn" data-view="product">機種別</button>
+            <button class="view-btn" data-view="detail">個人別詳細</button>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card plan-card">
+                <h3>📈 計画台数合計</h3>
+                <div class="value" id="totalPlan">0</div>
+                <div class="sub-value">台</div>
+            </div>
+            <div class="stat-card sales-card" id="salesCard">
+                <h3>✅ 販売実績合計</h3>
+                <div class="value" id="totalSales">0</div>
+                <div class="sub-value">計画達成率: <span id="achievementRate">0%</span><span class="achievement-badge" id="achievementBadge" style="display:none;">達成!</span></div>
+            </div>
+            <div class="stat-card deals-card">
+                <h3>💼 保有商談合計</h3>
+                <div class="value" id="totalDeals">0</div>
+                <div class="sub-value">台</div>
+            </div>
+            <div class="stat-card required-plan-card">
+                <h3>🎯 計画達成必要商談</h3>
+                <div class="value" id="requiredDealsForPlan">0</div>
+                <div class="sub-value">台</div>
+            </div>
+            <div class="stat-card required-target-card">
+                <h3>🚀 目標達成必要商談</h3>
+                <div class="value" id="requiredDealsForTarget">0</div>
+                <div class="sub-value">台</div>
+            </div>
+        </div>
+        <div class="search-info">
+            <div>
+                <strong>表示モード:</strong> <span id="viewMode">営業所別集計(営業部別含む)</span> |
+                表示中: <strong id="displayCount">0</strong>件 |
+                <span id="lastUpdate" style="color: #666; font-size: 12px;">最終更新: 未取得</span>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none;">
+                <button class="reset-btn" onclick="document.getElementById('excelFileInput').click()" style="background: #007bff;">
+                    📁 Excel/CSV読み込み
+                </button>
+                <button class="reset-btn" onclick="refreshData()" style="background: #28a745;">
+                    🔄 GitHub更新
+                </button>
+                <button class="reset-btn" onclick="resetFilters()" style="background: #dc3545;">
+                    🔄 フィルタリセット
+                </button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead id="tableHeader"></thead>
+                <tbody id="dataTable"></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        // ===== 設定 =====
+        const GITHUB_CSV_URL = 'https://raw.githubusercontent.com/hisae0810/tm-sagaku-dashboard/main/sales_data.csv';
+        
+        // マスターデータ
+        const salesPersonMaster = [
+            '横山 陽三', '富田 卓也', '千田 長治', '稲葉 晶教', '森山 学',
+            '蛯原 温', '三輪 雄大', '筒井 楓', '浜野 隆行', '江波 翔',
+            '佐々木 祐斗', '祝原 美玖', '白杉 城太', '藤原 圭介', '梁瀬 光太郎',
+            '井手 智也', '松本 晴登', '渋谷 崇', '保里 友佑', '北澤 甲斐',
+            '猿川 雄太', '中曽根 功也', '石川 幸男', '林 聖太', '江草 亘',
+            '齊藤 雅樹', '石井 博之', '杉本 進介', '松田 拓也', '佐々木 良介',
+            '髙橋 凌', '長渡 直樹', '山本 達也', '石川 雄樹', '豊田 悠太',
+            '志田 勝利', '飯沼 隼平', '織原 健', '加藤 哲朗', '千葉 大貴',
+            '笹間 雄貴'
+        ];
+        
+        const productMaster = [
+            'CSM', 'BSM', 'PVM', 'SVM', 'CNS', 'WEP', '送信機',
+            'TEC-8/5', 'EMS', 'HAMILTON', 'NKV-NPPV', '心電計',
+            'DSC,QP', 'ホルターレコーダ', 'STS', 'RMC', 'EEG',
+            'MEB/MEE', 'MEK', 'CHM'
+        ];
+        
+        // グローバル変数
+        let rawData = [];
+        let allData = [];
+        let currentView = 'office';
+        let filteredData = [];
+        
+        // ===== CSV読み込み機能 =====
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length < 2) {
+                throw new Error('CSVデータが空です');
+            }
+            
+            const headers = lines[0].split(',').map(h => h.trim());
+            console.log('CSVヘッダー:', headers);
+            
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                if (values.length !== headers.length) {
+                    console.warn('行' + (i + 1) + 'のカラム数が不正です:', values);
+                    continue;
+                }
+                
+                const row = {};
+                headers.forEach((header, index) => {
+                    const value = values[index].trim();
+                    if (['plan', 'sales', 'deals', 'target'].includes(header)) {
+                        row[header] = parseFloat(value) || 0;
+                    } else {
+                        row[header] = value;
+                    }
+                });
+                data.push(row);
+            }
+            
+            console.log('CSVデータ解析完了: ' + data.length + '件');
+            return data;
+        }
+        
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+            return result;
+        }
+        
+        async function loadCSVFromGitHub() {
+            try {
+                showLoading(true);
+                const timestamp = new Date().getTime();
+                const url = GITHUB_CSV_URL + '?t=' + timestamp;
+                console.log('CSV読み込み開始:', url);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/csv,text/plain',
+                    },
+                    cache: 'no-cache'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('HTTPエラー: ' + response.status + ' ' + response.statusText);
+                }
+                
+                const csvText = await response.text();
+                console.log('CSV取得成功:', csvText.length, '文字');
+                
+                const data = parseCSV(csvText);
+                return data;
+            } catch (error) {
+                console.error('CSV読み込みエラー:', error);
+                showError('CSVの読み込みに失敗しました: ' + error.message);
+                return null;
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // ===== Excel/CSVファイル読み込み =====
+        document.getElementById('excelFileInput').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                showLoading(true);
+                let data;
+                
+                if (file.name.endsWith('.csv')) {
+                    data = await readCSVFile(file);
+                } else {
+                    data = await readExcelFile(file);
+                }
+                
+                if (data && data.length > 0) {
+                    rawData.length = 0;
+                    rawData.push(...data);
+                    allData.length = 0;
+                    allData.push(...validateAndCleanData());
+                    filteredData = [...allData];
+                    updateDisplay();
+                    
+                    const now = new Date().toLocaleString('ja-JP');
+                    document.getElementById('lastUpdate').textContent = '最終更新: ' + now;
+                    document.getElementById('lastUpdate').style.color = '#28a745';
+                    alert('✅ ファイルを読み込みました！\n更新時刻: ' + now + '\n件数: ' + data.length + '件');
+                }
+            } catch (error) {
+                console.error('ファイル読み込みエラー:', error);
+                showError('ファイルの読み込みに失敗しました: ' + error.message);
+            } finally {
+                showLoading(false);
+                e.target.value = '';
+            }
+        });
+        
+        async function readCSVFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const csvText = e.target.result;
+                        const data = parseCSV(csvText);
+                        console.log('CSVファイル読み込み成功:', data.length, '件');
+                        resolve(data);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = function(error) {
+                    reject(error);
+                };
+                reader.readAsText(file, 'UTF-8');
+            });
+        }
+        
+        async function readExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                        console.log('Excelファイル読み込み成功:', jsonData.length, '件');
+                        resolve(jsonData);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = function(error) {
+                    reject(error);
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        // ===== データ更新 =====
+        async function refreshData() {
+            const loadedData = await loadCSVFromGitHub();
+            
+            if (loadedData && loadedData.length > 0) {
+                const validData = loadedData.filter(item => {
+                    if (!item.dept || !item.office || !item.person || !item.product) {
+                        console.warn('不完全なデータをスキップ:', item);
+                        return false;
+                    }
+                    return true;
+                });
+                
+                console.log('有効なデータ: ' + validData.length + '/' + loadedData.length + '件');
+                
+                rawData.length = 0;
+                rawData.push(...validData);
+                allData.length = 0
+                allData.push(...validateAndCleanData());
+                filteredData = [...allData];
+                updateDisplay();
+                
+                const now = new Date().toLocaleString('ja-JP');
+                const lastUpdateElement = document.getElementById('lastUpdate');
+                if (lastUpdateElement) {
+                    lastUpdateElement.textContent = '最終更新: ' + now;
+                    lastUpdateElement.style.color = '#28a745';
+                }
+                alert('✅ データを更新しました！\n更新時刻: ' + now + '\n件数: ' + validData.length + '件');
+            } else {
+                showError('有効なデータが見つかりませんでした');
+            }
+        }
+        
+        // ===== ユーティリティ関数 =====
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = show ? 'flex' : 'none';
+            }
+        }
+        
+        function validateAndCleanData() {
+            return rawData.filter(item => {
+                if (!item.dept || !item.office || !item.person || !item.product) {
+                    console.warn('不完全なデータ:', item);
+                    return false;
+                }
+                item.plan = Number(item.plan) || 0;
+                item.sales = Number(item.sales) || 0;
+                item.deals = Number(item.deals) || 0;
+                item.target = Number(item.target) || 0;
+                return true;
+            });
+        }
+        
+        // ===== フィルター機能 =====
+        function initFilters() {
+            try {
+                const offices = [...new Set(allData.map(d => d.office))].sort();
+                const officeFilter = document.getElementById('officeFilter');
+                const salesPersonFilter = document.getElementById('salesPersonFilter');
+                const productFilter = document.getElementById('productFilter');
+                
+                officeFilter.innerHTML = '<option value="">全営業所</option>';
+                offices.forEach(office => {
+                    const option = document.createElement('option');
+                    option.value = office;
+                    option.textContent = office;
+                    officeFilter.appendChild(option);
+                });
+                
+                salesPersonFilter.innerHTML = '<option value="">全営業員</option>';
+                salesPersonMaster.forEach(person => {
+                    const option = document.createElement('option');
+                    option.value = person;
+                    option.textContent = person;
+                    salesPersonFilter.appendChild(option);
+                });
+                
+                productFilter.innerHTML = '<option value="">全機種</option>';
+                productMaster.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product;
+                    option.textContent = product;
+                    productFilter.appendChild(option);
+                });
+            } catch (error) {
+                console.error('フィルター初期化エラー:', error);
+                showError('フィルターの初期化に失敗しました');
+            }
+        }
+        
+        function filterData() {
+            try {
+                const deptValue = document.getElementById('departmentFilter').value;
+                const officeValue = document.getElementById('officeFilter').value;
+                const personValue = document.getElementById('salesPersonFilter').value;
+                const productValue = document.getElementById('productFilter').value;
+                const searchValue = document.getElementById('searchInput').value.toLowerCase();
+                
+                if (!deptValue && !officeValue && !personValue && !productValue && !searchValue) {
+                    filteredData = [...allData];
+                } else {
+                    filteredData = allData.filter(item => {
+                        if (deptValue && item.dept !== deptValue) return false;
+                        if (officeValue && item.office !== officeValue) return false;
+                        if (personValue && item.person !== personValue) return false;
+                        if (productValue && item.product !== productValue) return false;
+                        if (searchValue) {
+                            const searchableText = (item.office + ' ' + item.person + ' ' + item.product).toLowerCase();
+                            if (!searchableText.includes(searchValue)) return false;
+                        }
+                        return true;
+                    });
+                }
+                
+                if (personValue || (officeValue && productValue)) {
+                    currentView = 'detail';
+                    updateViewButtons();
+                }
+                
+                updateDisplay();
+            } catch (error) {
+                console.error('フィルタリングエラー:', error);
+                showError('データのフィルタリング中にエラーが発生しました');
+            }
+        }
+        
+        function resetFilters() {
+            document.getElementById('departmentFilter').value = '';
+            document.getElementById('officeFilter').value = '';
+            document.getElementById('salesPersonFilter').value = '';
+            document.getElementById('productFilter').value = '';
+            document.getElementById('searchInput').value = '';
+            currentView = 'office';
+            updateViewButtons();
+            filterData();
+        }
+        
+        // ===== 統計更新 =====
+        function updateStats() {
+            try {
+                const totalPlan = filteredData.reduce((sum, item) => sum + (item.plan || 0), 0);
+                const totalSales = filteredData.reduce((sum, item) => sum + (item.sales || 0), 0);
+                const totalDeals = filteredData.reduce((sum, item) => sum + (item.deals || 0), 0);
+                
+                const requiredForPlan = filteredData.reduce((sum, item) => {
+                    const remaining = (item.plan || 0) - (item.sales || 0);
+                    return sum + Math.max(0, remaining - (item.deals || 0));
+                }, 0);
+                
+                const requiredForTarget = filteredData.reduce((sum, item) => {
+                    const remaining = (item.target || 0) - (item.sales || 0);
+                    return sum + Math.max(0, remaining - (item.deals || 0));
+                }, 0);
+                
+                const achievementRate = totalPlan > 0 ? ((totalSales / totalPlan) * 100).toFixed(1) : 0;
+                
+                document.getElementById('totalPlan').textContent = totalPlan.toFixed(1);
+                document.getElementById('totalSales').textContent = totalSales.toFixed(1);
+                document.getElementById('totalDeals').textContent = totalDeals.toFixed(1);
+                document.getElementById('requiredDealsForPlan').textContent = requiredForPlan.toFixed(1);
+                document.getElementById('requiredDealsForTarget').textContent = requiredForTarget.toFixed(1);
+                document.getElementById('achievementRate').textContent = achievementRate + '%';
+                
+                const salesCard = document.getElementById('salesCard');
+                const achievementBadge = document.getElementById('achievementBadge');
+                salesCard.classList.remove('excellent', 'good', 'low');
+                
+                if (achievementRate >= 100) {
+                    salesCard.classList.add('excellent');
+                    achievementBadge.style.display = 'inline-block';
+                    achievementBadge.textContent = '🎉 達成!';
+                } else if (achievementRate >= 80) {
+                    salesCard.classList.add('good');
+                    achievementBadge.style.display = 'none';
+                } else {
+                    salesCard.classList.add('low');
+                    achievementBadge.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('統計更新エラー:', error);
+                showError('統計の更新中にエラーが発生しました');
+            }
+        }
+        
+        // ===== 集計関数 =====
+        function aggregateByDept() {
+            const deptMap = new Map();
+            filteredData.forEach(item => {
+                if (!deptMap.has(item.dept)) {
+                    deptMap.set(item.dept, {
+                        dept: item.dept,
+                        plan: 0,
+                        sales: 0,
+                        deals: 0,
+                        target: 0
+                    });
+                }
+                const dept = deptMap.get(item.dept);
+                dept.plan += item.plan || 0;
+                dept.sales += item.sales || 0;
+                dept.deals += item.deals || 0;
+                dept.target += item.target || 0;
+            });
+            return Array.from(deptMap.values());
+        }
+        
+        function aggregateByOffice() {
+            const officeMap = new Map();
+            filteredData.forEach(item => {
+                if (!officeMap.has(item.office)) {
+                    officeMap.set(item.office, {
+                        dept: item.dept,
+                        office: item.office,
+                        plan: 0,
+                        sales: 0,
+                        deals: 0,
+                        target: 0
+                    });
+                }
+                const office = officeMap.get(item.office);
+                office.plan += item.plan || 0;
+                office.sales += item.sales || 0;
+                office.deals += item.deals || 0;
+                office.target += item.target || 0;
+            });
+            return Array.from(officeMap.values());
+        }
+        
+        function aggregateByProduct() {
+            const productMap = new Map();
+            filteredData.forEach(item => {
+                if (!productMap.has(item.product)) {
+                    productMap.set(item.product, {
+                        product: item.product,
+                        plan: 0,
+                        sales: 0,
+                        deals: 0,
+                        target: 0
+                    });
+                }
+                const product = productMap.get(item.product);
+                product.plan += item.plan || 0;
+                product.sales += item.sales || 0;
+                product.deals += item.deals || 0;
+                product.target += item.target || 0;
+            });
+            
+            const result = Array.from(productMap.values());
+            result.sort((a, b) => {
+                const indexA = productMaster.indexOf(a.product);
+                const indexB = productMaster.indexOf(b.product);
+                if (indexA !== -1 && indexB !== -1) {
+                    return indexA - indexB;
+                }
+                if (indexA !== -1) return -1;
+                if (indexB !== -1) return 1;
+                return a.product.localeCompare(b.product);
+            });
+            return result;
+        }
+        
+        function isFilterApplied() {
+            return document.getElementById('departmentFilter').value ||
+                   document.getElementById('officeFilter').value ||
+                   document.getElementById('salesPersonFilter').value ||
+                   document.getElementById('productFilter').value ||
+                   document.getElementById('searchInput').value;
+        }
+        
+        // ===== テーブル描画 =====
+        function renderRow(item, plan, sales, deals, target, totalWithDeals, achievementRate, requiredForPlan, requiredForTarget) {
+            let progressClass = '';
+            if (achievementRate >= 100) {
+                progressClass = 'excellent';
+            } else if (achievementRate >= 80) {
+                progressClass = 'good';
+            } else if (achievementRate < 50) {
+                progressClass = 'low';
+            }
+            
+            return '<td>' + plan.toFixed(1) + '</td>' +
+                '<td><strong>' + sales.toFixed(1) + '</strong></td>' +
+                '<td>' +
+                    '<div class="progress-bar">' +
+                        '<div class="progress-fill ' + progressClass + '" style="width: ' + Math.min(achievementRate, 100) + '%">' +
+                            achievementRate + '%' +
+                        '</div>' +
+                    '</div>' +
+                '</td>' +
+                '<td>' + deals.toFixed(1) + '</td>' +
+                '<td>' + totalWithDeals.toFixed(1) + '</td>' +
+                '<td>' + target.toFixed(1) + '</td>' +
+                '<td>' +
+                    (requiredForPlan > 0 ?
+                        '<span class="badge badge-danger">' + requiredForPlan.toFixed(1) + '台</span>' :
+                        '<span class="badge badge-success">充足</span>') +
+                '</td>' +
+                '<td>' +
+                    (requiredForTarget > 0 ?
+                        '<span class="badge badge-info">' + requiredForTarget.toFixed(1) + '台</span>' :
+                        '<span class="badge badge-success">充足</span>') +
+                '</td>';
+        }
+        
+        function updateTable() {
+            try {
+                const thead = document.getElementById('tableHeader');
+                const tbody = document.getElementById('dataTable');
+                tbody.innerHTML = '';
+                
+                let data, headers;
+                const filterApplied = isFilterApplied();
+                
+                if (currentView === 'office') {
+                    if (!filterApplied) {
+                        headers = '<tr><th>営業部</th><th>営業所</th><th>計画</th><th>実績</th><th>達成率</th><th>保有商談</th><th>実績+保有</th><th>目標台数</th><th>必要商談(計画)</th><th>必要商談(目標)</th></tr>';
+                        document.getElementById('viewMode').textContent = '営業所別集計(営業部別含む)';
+                        
+                        const deptData = aggregateByDept();
+                        const officeData = aggregateByOffice();
+                        
+                        const deptGroups = {};
+                        officeData.forEach(office => {
+                            if (!deptGroups[office.dept]) {
+                                deptGroups[office.dept] = [];
+                            }
+                            deptGroups[office.dept].push(office);
+                        });
+                        
+                        thead.innerHTML = headers;
+                        
+                        deptData.forEach(dept => {
+                            const plan = dept.plan || 0;
+                            const sales = dept.sales || 0;
+                            const deals = dept.deals || 0;
+                            const target = dept.target || 0;
+                            const totalWithDeals = sales + deals;
+                            const achievementRate = plan > 0 ? ((sales / plan) * 100).toFixed(1) : 0;
+                            const requiredForPlan = Math.max(0, plan - sales - deals);
+                            const requiredForTarget = Math.max(0, target - sales - deals);
+                            
+                            const deptRow = document.createElement('tr');
+                            deptRow.className = 'dept-row';
+                            deptRow.innerHTML = '<td colspan="2"><strong>【' + dept.dept + '】</strong></td>' +
+                                renderRow(dept, plan, sales, deals, target, totalWithDeals, achievementRate, requiredForPlan, requiredForTarget);
+                            tbody.appendChild(deptRow);
+                            
+                            if (deptGroups[dept.dept]) {
+                                deptGroups[dept.dept].forEach(office => {
+                                    const oPlan = office.plan || 0;
+                                    const oSales = office.sales || 0;
+                                    const oDeals = office.deals || 0;
+                                    const oTarget = office.target || 0;
+                                    const oTotalWithDeals = oSales + oDeals;
+                                    const oAchievementRate = oPlan > 0 ? ((oSales / oPlan) * 100).toFixed(1) : 0;
+                                    const oRequiredForPlan = Math.max(0, oPlan - oSales - oDeals);
+                                    const oRequiredForTarget = Math.max(0, oTarget - oSales - oDeals);
+                                    
+                                    const officeRow = document.createElement('tr');
+                                    officeRow.innerHTML = '<td style="padding-left: 20px;">' + office.dept + '</td>' +
+                                        '<td><strong>' + office.office + '</strong></td>' +
+                                        renderRow(office, oPlan, oSales, oDeals, oTarget, oTotalWithDeals, oAchievementRate, oRequiredForPlan, oRequiredForTarget);
+                                    tbody.appendChild(officeRow);
+                                });
+                            }
+                        });
+                        
+                        document.getElementById('displayCount').textContent = deptData.length + officeData.length;
+                        return;
+                    } else {
+                        data = aggregateByOffice();
+                        headers = '<tr><th>営業部</th><th>営業所</th><th>計画</th><th>実績</th><th>達成率</th><th>保有商談</th><th>実績+保有</th><th>目標台数</th><th>必要商談(計画)</th><th>必要商談(目標)</th></tr>';
+                        document.getElementById('viewMode').textContent = '営業所別集計';
+                    }
+                } else if (currentView === 'product') {
+                    data = aggregateByProduct();
+                    headers = '<tr><th>機種</th><th>計画</th><th>実績</th><th>達成率</th><th>保有商談</th><th>実績+保有</th><th>目標台数</th><th>必要商談(計画)</th><th>必要商談(目標)</th></tr>';
+                    document.getElementById('viewMode').textContent = '機種別集計';
+                } else {
+                    data = filteredData;
+                    headers = '<tr><th>営業部</th><th>営業所</th><th>営業員</th><th>機種</th><th>計画</th><th>実績</th><th>達成率</th><th>保有商談</th><th>実績+保有</th><th>目標台数</th><th>必要商談(計画)</th><th>必要商談(目標)</th></tr>';
+                    document.getElementById('viewMode').textContent = '個人別詳細';
+                }
+                
+                thead.innerHTML = headers;
+                
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    const plan = item.plan || 0;
+                    const sales = item.sales || 0;
+                    const deals = item.deals || 0;
+                    const target = item.target || 0;
+                    const totalWithDeals = sales + deals;
+                    const achievementRate = plan > 0 ? ((sales / plan) * 100).toFixed(1) : 0;
+                    const requiredForPlan = Math.max(0, plan - sales - deals);
+                    const requiredForTarget = Math.max(0, target - sales - deals);
+                    
+                    if (currentView === 'office') {
+                        row.innerHTML = '<td><strong>' + item.dept + '</strong></td>' +
+                            '<td><strong>' + item.office + '</strong></td>' +
+                            renderRow(item, plan, sales, deals, target, totalWithDeals, achievementRate, requiredForPlan, requiredForTarget);
+                    } else if (currentView === 'product') {
+                        row.innerHTML = '<td><strong>' + item.product + '</strong></td>' +
+                            renderRow(item, plan, sales, deals, target, totalWithDeals, achievementRate, requiredForPlan, requiredForTarget);
+                    } else {
+                        row.innerHTML = '<td>' + item.dept + '</td>' +
+                            '<td>' + item.office + '</td>' +
+                            '<td><strong>' + item.person + '</strong></td>' +
+                            '<td><strong>' + item.product + '</strong></td>' +
+                            renderRow(item, plan, sales, deals, target, totalWithDeals, achievementRate, requiredForPlan, requiredForTarget);
+                    }
+                    tbody.appendChild(row);
+                });
+                
+                document.getElementById('displayCount').textContent = data.length;
+            } catch (error) {
+                console.error('テーブル更新エラー:', error);
+                showError('テーブルの更新中にエラーが発生しました');
+            }
+        }
+        
+        function updateDisplay() {
+            showLoading(true);
+            try {
+                updateStats();
+                updateTable();
+            } finally {
+                setTimeout(() => showLoading(false), 100);
+            }
+        }
+        
+        function updateViewButtons() {
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.view === currentView) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+        
+        // ===== イベントリスナー =====
+        document.getElementById('departmentFilter').addEventListener('change', filterData);
+        document.getElementById('officeFilter').addEventListener('change', filterData);
+        document.getElementById('salesPersonFilter').addEventListener('change', filterData);
+        document.getElementById('productFilter').addEventListener('change', filterData);
+        document.getElementById('searchInput').addEventListener('input', filterData);
+        
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentView = btn.dataset.view;
+                updateViewButtons();
+                updateDisplay();
+            });
+        });
+        
+        // ===== 初期化 =====
+        async function initialize() {
+            try {
+                showLoading(true);
+                console.log('アプリケーション初期化開始');
+                
+                const loadedData = await loadCSVFromGitHub();
+                if (loadedData && loadedData.length > 0) {
+                    rawData = loadedData;
+                    console.log('GitHubのCSVデータを使用します');
+                } else {
+                    console.log('初期データが読み込めませんでした');
+                    showError('CSVファイルが見つかりません。GitHubのURLを確認するか、Excel/CSVファイルを直接読み込んでください。');
+                }
+                
+                allData = validateAndCleanData();
+                filteredData = [...allData];
+                initFilters();
+                updateDisplay();
+                
+                const lastUpdateElement = document.getElementById('lastUpdate');
+                if (lastUpdateElement) {
+                    lastUpdateElement.textContent = '最終更新: ' + new Date().toLocaleString('ja-JP');
+                }
+                
+                console.log('初期化完了');
+            } catch (error) {
+                console.error('初期化エラー:', error);
+                showError('アプリケーションの初期化に失敗しました');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // ページ読み込み時の初期化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initialize);
+        } else {
+            initialize();
+        }
+    </script>
+</body>
+</html>
